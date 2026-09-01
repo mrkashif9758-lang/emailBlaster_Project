@@ -4,6 +4,7 @@ import { connectDB } from "@/lib/mongodb";
 import User from "@/models/User";
 
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
 const ADMIN_EMAIL = process.env.TEMP_ADMIN_EMAIL ?? "admin@emailblaster.local";
 const ADMIN_PASSWORD = process.env.TEMP_ADMIN_PASSWORD ?? "Admin@12345";
@@ -13,9 +14,16 @@ const ADMIN_NAME = process.env.TEMP_ADMIN_NAME ?? "Admin";
  * Development-only bootstrap endpoint. Visit /create-admin once, then sign in
  * at /login using TEMP_ADMIN_EMAIL and TEMP_ADMIN_PASSWORD (or the defaults).
  */
-export async function GET() {
+export async function GET(request: Request) {
   if (process.env.NODE_ENV === "production") {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
+    const setupKey = process.env.TEMP_ADMIN_SETUP_KEY;
+    const requestKey =
+      request.headers.get("x-admin-setup-key") ??
+      new URL(request.url).searchParams.get("key");
+
+    if (!setupKey || requestKey !== setupKey) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
   }
 
   try {

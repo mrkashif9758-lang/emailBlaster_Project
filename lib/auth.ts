@@ -11,6 +11,10 @@ export interface JWTPayload {
 }
 
 export function signToken(payload: JWTPayload): string {
+  if (!JWT_SECRET) {
+    throw new Error("JWT_SECRET is not configured");
+  }
+
   return jwt.sign(payload, JWT_SECRET, { expiresIn: COOKIE_MAX_AGE });
 }
 

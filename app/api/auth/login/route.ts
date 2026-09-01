@@ -4,6 +4,8 @@ import { connectDB } from "@/lib/mongodb";
 import User from "@/models/User";
 import { signToken, setAuthCookie } from "@/lib/auth";
 
+export const runtime = "nodejs";
+
 export async function POST(req: NextRequest) {
   try {
     const { email, password } = await req.json();
@@ -13,7 +15,7 @@ export async function POST(req: NextRequest) {
 
     await connectDB();
 
-    const user = await User.findOne({ email });
+    const user = await User.findOne({ email: email.toLowerCase().trim() });
     if (!user)
       return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
 
@@ -27,7 +29,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       user: { id: user._id, name: user.name, email: user.email },
     });
-  } catch {
+  } catch (error) {
+    console.error("Login failed:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
