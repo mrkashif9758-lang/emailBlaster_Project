@@ -1,8 +1,32 @@
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongodb";
+import { calculateDomainReputation } from "@/lib/domainHealth";
 
 import Campaign from "@/models/Campaign";
 import Contact from "@/models/Contact";
+import DomainHealth from "@/models/DomainHealth";
+
+const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+function getDayKey(date: Date) {
+  return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+}
+
+function buildLast7DaysTrend() {
+  const now = new Date();
+  const entries: Array<{ label: string; date: Date }> = [];
+
+  for (let i = 6; i >= 0; i--) {
+    const date = new Date(now);
+    date.setDate(now.getDate() - i);
+    entries.push({
+      label: DAY_LABELS[date.getDay()],
+      date,
+    });
+  }
+
+  return entries;
+}
 
 export async function GET() {
   try {
@@ -15,92 +39,178 @@ export async function GET() {
     const campaigns = await Campaign.find().sort({ createdAt: -1 });
 
     const totalEmailsSent = campaigns.reduce(
-      (sum, c) => sum + (c.sentCount || 0),
+      (sum, campaign) => sum + (campaign.sentCount || 0),
       0
     );
 
-    const totalEmailsAttempted = campaigns.reduce(
-      (sum, c) =>
-        sum + (c.totalRecipients || (c.sentCount || 0) + (c.bounceCount || 0)),
+    const totalDelivered = campaigns.reduce(
+      (sum, campaign) => sum + (campaign.deliveredCount || 0),
       0
     );
 
-    const totalBounces = campaigns.reduce(
-      (sum, c) => sum + (c.bounceCount || 0),
+    const totalOpened = campaigns.reduce(
+      (sum, campaign) => sum + (campaign.openCount || 0),
       0
     );
 
-    const bounceRate =
-      totalEmailsAttempted > 0
-        ? parseFloat(((totalBounces / totalEmailsAttempted) * 100).toFixed(2))
-        : 0;
+    const totalClicked = campaigns.reduce(
+      (sum, campaign) => sum + (campaign.clickCount || 0),
+      0
+    );
 
-    // Build last-7-days bounce trend from failedEmails records
-    const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-    const trendMap: Record<string, number> = {};
+    const totalHardBounces = campaigns.reduce(
+      (sum, campaign) => sum + (campaign.hardBounceCount || 0),
+      0
+    );
 
-    const now = new Date();
-    const last7: { label: string; date: Date }[] = [];
-    for (let i = 6; i >= 0; i--) {
-      const d = new Date(now);
-      d.setDate(now.getDate() - i);
-      const label = days[d.getDay()];
-      last7.push({ label, date: d });
-      trendMap[`${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`] = 0;
+    const totalSoftBounces = campaigns.reduce(
+      (sum, campaign) => sum + (campaign.softBounceCount || 0),
+      0
+    );
+
+    const spamComplaints = campaigns.reduce(
+      (sum, campaign) => sum + (campaign.spamComplaintCount || 0),
+      0
+    );
+
+    const unsubscribeCount = campaigns.reduce(
+      (sum, campaign) => sum + (campaign.unsubscribeCount || 0),
+      0
+    );
+
+    const totalEmailsAttempted = Math.max(
+      totalDelivered + totalHardBounces + totalSoftBounces,
+      totalEmailsSent,
+      1
+    );
+
+    const deliveryRate = totalEmailsAttempted > 0
+      ? Number(((totalDelivered / totalEmailsAttempted) * 100).toFixed(2))
+      : 0;
+
+    const openRate = totalDelivered > 0
+      ? Number(((totalOpened / totalDelivered) * 100).toFixed(2))
+      : 0;
+
+    const ctr = totalOpened > 0
+      ? Number(((totalClicked / totalOpened) * 100).toFixed(2))
+      : 0;
+
+    const bounceRate = totalEmailsAttempted > 0
+      ? Number((((totalHardBounces + totalSoftBounces) / totalEmailsAttempted) * 100).toFixed(2))
+      : 0;
+
+    const unsubscribeRate = totalEmailsAttempted > 0
+      ? Number(((unsubscribeCount / totalEmailsAttempted) * 100).toFixed(2))
+      : 0;
+
+    const domainRecord = await DomainHealth.findOne({}).sort({ lastCheckedAt: -1 }).lean();
+    const domainHealth = {
+      spfStatus: domainRecord?.spfStatus || "failed",
+      dkimStatus: domainRecord?.dkimStatus || "failed",
+      dmarcStatus: domainRecord?.dmarcStatus || "failed",
+      reputation: domainRecord?.reputation || calculateDomainReputation({
+        bounceRate,
+        spamComplaints,
+        unsubscribeRate,
+        openRate,
+        deliveryRate,
+      }),
+      lastCheckedAt: domainRecord?.lastCheckedAt || null,
+    };
+
+    const last7Days = buildLast7DaysTrend();
+    const deliveryTrendMap: Record<string, number> = {};
+    const openTrendMap: Record<string, number> = {};
+    const bounceTrendMap: Record<string, number> = {};
+
+    for (const { date } of last7Days) {
+      const key = getDayKey(date);
+      deliveryTrendMap[key] = 0;
+      openTrendMap[key] = 0;
+      bounceTrendMap[key] = 0;
     }
 
     for (const campaign of campaigns) {
-      for (const fe of campaign.failedEmails || []) {
-        if (!fe.date) continue;
-        const fd = new Date(fe.date);
-        const key = `${fd.getFullYear()}-${fd.getMonth()}-${fd.getDate()}`;
-        if (key in trendMap) {
-          trendMap[key]++;
+      if (campaign.sentAt) {
+        const sentDate = new Date(campaign.sentAt);
+        const key = getDayKey(sentDate);
+        if (key in deliveryTrendMap) {
+          deliveryTrendMap[key] += campaign.deliveredCount || campaign.sentCount || 0;
+        }
+      }
+
+      if (campaign.openCount) {
+        const activityDates = campaign.openHistory || [];
+        for (const activity of activityDates) {
+          const openDate = new Date(activity.date || activity.createdAt || campaign.sentAt || Date.now());
+          const key = getDayKey(openDate);
+          if (key in openTrendMap) {
+            openTrendMap[key] += activity.count || 1;
+          }
+        }
+      }
+
+      const failedEmails = campaign.failedEmails || [];
+      for (const failure of failedEmails) {
+        if (!failure.date) continue;
+        const failureDate = new Date(failure.date);
+        const key = getDayKey(failureDate);
+        if (key in bounceTrendMap) {
+          bounceTrendMap[key] += 1;
         }
       }
     }
 
-    // Build last-7-days sent trend from sentAt field
-    const sentTrendMap: Record<string, number> = {};
-    for (const { date } of last7) {
-      sentTrendMap[`${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`] = 0;
-    }
-    for (const campaign of campaigns) {
-      if (!campaign.sentAt) continue;
-      const sd = new Date(campaign.sentAt);
-      const key = `${sd.getFullYear()}-${sd.getMonth()}-${sd.getDate()}`;
-      if (key in sentTrendMap) {
-        sentTrendMap[key] += campaign.sentCount || 0;
-      }
-    }
-    const sentTrend = last7.map(({ label, date }) => ({
+    const deliveryTrend = last7Days.map(({ label, date }) => ({
       day: label,
-      value: sentTrendMap[`${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`] || 0,
+      value: deliveryTrendMap[getDayKey(date)] || 0,
     }));
 
-    const bounceTrend = last7.map(({ label, date }) => ({
+    const openTrend = last7Days.map(({ label, date }) => ({
       day: label,
-      value:
-        trendMap[
-          `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`
-        ] || 0,
+      value: openTrendMap[getDayKey(date)] || 0,
     }));
 
-    const topCampaigns = campaigns.slice(0, 4);
+    const bounceTrend = last7Days.map(({ label, date }) => ({
+      day: label,
+      value: bounceTrendMap[getDayKey(date)] || 0,
+    }));
+
+    const topCampaigns = campaigns.slice(0, 4).map((campaign) => ({
+      _id: String(campaign._id),
+      title: campaign.title,
+      status: campaign.status,
+      sentCount: campaign.sentCount || 0,
+      totalRecipients: campaign.totalRecipients || 0,
+      createdAt: campaign.createdAt,
+    }));
 
     return NextResponse.json({
       totalContacts,
       totalCampaigns,
       sentCampaigns,
       totalEmailsSent,
-      totalBounces,
+      totalDelivered,
+      totalOpened,
+      totalClicked,
+      totalHardBounces,
+      totalSoftBounces,
+      spamComplaints,
+      unsubscribeCount,
+      deliveryRate,
+      openRate,
+      ctr,
       bounceRate,
+      unsubscribeRate,
+      domainHealth,
+      deliveryTrend,
+      openTrend,
       bounceTrend,
-      sentTrend,
       topCampaigns,
     });
   } catch (error) {
-    console.error(error);
+    console.error("Analytics Error:", error);
     return NextResponse.json({ error: "Analytics Error" }, { status: 500 });
   }
 }

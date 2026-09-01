@@ -10,24 +10,26 @@ import {
   AlertTriangle,
   ArrowUpRight,
   ArrowDownRight,
+  CheckCircle2,
+  ShieldCheck,
+  Gauge,
+  Mail,
 } from "lucide-react";
 
-import OpenRateChart from "@/components/analytics/OpenRateChart";
-import ClickRateChart from "@/components/analytics/ClickRateChart";
-import BounceChart from "@/components/analytics/BounceChart";
+import DomainHealthCard from "@/components/analytics/DomainHealthCard";
+import TrendChart from "@/components/analytics/TrendChart";
 
 export default function AnalyticsPage() {
   const [analytics, setAnalytics] = useState<any>(null);
 
   useEffect(() => {
-    fetchAnalytics();
+    void fetchAnalytics();
   }, []);
 
   const fetchAnalytics = async () => {
     try {
       const res = await fetch("/api/analytics");
       const data = await res.json();
-
       setAnalytics(data);
     } catch (error) {
       console.error(error);
@@ -47,65 +49,65 @@ export default function AnalyticsPage() {
     );
   }
 
-const performanceMetrics = [
-  {
-    title: "Total Emails Sent",
-    value: analytics.totalEmailsSent || 0,
-    change: "+12%",
-    icon: BarChart3,
-  },
-  {
-    title: "Total Campaigns",
-    value: analytics.totalCampaigns || 0,
-    change: "+8%",
-    icon: MailCheck,
-  },
-  {
-    title: "Sent Campaigns",
-    value: analytics.sentCampaigns || 0,
-    change: "+5%",
-    icon: MousePointerClick,
-  },
-  {
-    title: "Active Contacts",
-    value: analytics.totalContacts || 0,
-    change: "+15%",
-    icon: AlertTriangle,
-  },
-  // {
-  //   title: "Bounce Rate",
-  //   value: `${analytics.bounceRate ?? 0}%`,
-  //   change: analytics.bounceRate > 5 ? "-2%" : "+0%",
-  //   icon: AlertTriangle,
-  // },
-];
+  const performanceMetrics = [
+    {
+      title: "Total Emails Sent",
+      value: analytics.totalEmailsSent || 0,
+      change: "+12%",
+      icon: BarChart3,
+    },
+    {
+      title: "Delivery Rate",
+      value: `${analytics.deliveryRate ?? 0}%`,
+      change: analytics.deliveryRate > 90 ? "+2%" : "+0%",
+      icon: MailCheck,
+    },
+    {
+      title: "Open Rate",
+      value: `${analytics.openRate ?? 0}%`,
+      change: analytics.openRate > 20 ? "+4%" : "+0%",
+      icon: MousePointerClick,
+    },
+    {
+      title: "Bounce Rate",
+      value: `${analytics.bounceRate ?? 0}%`,
+      change: analytics.bounceRate > 5 ? "-2%" : "+0%",
+      icon: AlertTriangle,
+    },
+  ];
+
+  const domainHealth = analytics.domainHealth || {
+    spfStatus: "failed",
+    dkimStatus: "failed",
+    dmarcStatus: "failed",
+    reputation: 0,
+    lastCheckedAt: null,
+  };
 
   return (
     <DashboardLayout>
       <div className="space-y-6 pb-12">
-        {/* Header */}
         <div className="relative overflow-hidden rounded-2xl border border-slate-200 bg-gradient-to-br from-white via-white to-blue-50/70 px-6 py-7 shadow-sm sm:px-8">
           <div className="absolute -right-12 -top-16 h-44 w-44 rounded-full bg-blue-100/60 blur-3xl" />
           <div className="relative flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <span className="inline-flex items-center rounded-full border border-blue-100 bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">
-                Performance overview
+                Deliverability overview
               </span>
               <h1 className="mt-3 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
-                Campaign Analytics & Reports
+                Domain Health & Email Deliverability
               </h1>
               <p className="mt-2 text-sm text-slate-500">
-                Deep dive into delivery statistics and campaign performance.
+                Track DNS authentication, inbox placement, engagement quality, and reputation health.
               </p>
             </div>
             <div className="inline-flex w-fit items-center gap-2 rounded-xl border border-slate-200 bg-white/80 px-3 py-2 text-xs font-medium text-slate-500 shadow-sm backdrop-blur">
               <span className="h-2 w-2 rounded-full bg-emerald-500" />
-              Live campaign data
+              Live deliverability signals
             </div>
           </div>
         </div>
 
-        {/* Stats */}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {performanceMetrics.map((metric, index) => {
             const Icon = metric.icon;
@@ -135,44 +137,109 @@ const performanceMetrics = [
 
                 <div className="mt-6 flex items-end justify-between gap-3">
                   <h3 className="text-2xl font-bold tracking-tight text-slate-900">
-                    {Number(metric.value).toLocaleString()}
+                    {metric.value}
                   </h3>
 
-               {(() => {
-  const isPositive = metric.change.startsWith("+");
-
-  return (
-    <span
-      className={`inline-flex items-center rounded-full px-2 py-1 text-[11px] font-semibold ${
-        isPositive
-          ? "bg-emerald-50 text-emerald-700"
-          : "bg-rose-50 text-rose-700"
-      }`}
-    >
-      {isPositive ? (
-        <ArrowUpRight className="mr-0.5 h-3 w-3" />
-      ) : (
-        <ArrowDownRight className="mr-0.5 h-3 w-3" />
-      )}
-
-      {metric.change}
-    </span>
-  );
-})()}
+                  {(() => {
+                    const isPositive = metric.change.startsWith("+");
+                    return (
+                      <span
+                        className={`inline-flex items-center rounded-full px-2 py-1 text-[11px] font-semibold ${
+                          isPositive
+                            ? "bg-emerald-50 text-emerald-700"
+                            : "bg-rose-50 text-rose-700"
+                        }`}
+                      >
+                        {isPositive ? (
+                          <ArrowUpRight className="mr-0.5 h-3 w-3" />
+                        ) : (
+                          <ArrowDownRight className="mr-0.5 h-3 w-3" />
+                        )}
+                        {metric.change}
+                      </span>
+                    );
+                  })()}
                 </div>
               </div>
             );
           })}
         </div>
 
-        {/* Charts */}
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-          <OpenRateChart />
-          <ClickRateChart data={analytics.sentTrend} />
-          <BounceChart data={analytics.bounceTrend} />
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1.2fr_2.8fr]">
+          <DomainHealthCard health={domainHealth} />
+
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+              <div className="flex items-center gap-3">
+                <div className="rounded-xl bg-emerald-50 p-2 text-emerald-600">
+                  <CheckCircle2 className="h-4 w-4" />
+                </div>
+                <div>
+                  <p className="text-xs font-medium uppercase tracking-[0.18em] text-slate-500">Delivered</p>
+                  <h3 className="mt-1 text-2xl font-bold text-slate-900">{analytics.totalDelivered || 0}</h3>
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+              <div className="flex items-center gap-3">
+                <div className="rounded-xl bg-blue-50 p-2 text-blue-600">
+                  <Mail className="h-4 w-4" />
+                </div>
+                <div>
+                  <p className="text-xs font-medium uppercase tracking-[0.18em] text-slate-500">Clicked</p>
+                  <h3 className="mt-1 text-2xl font-bold text-slate-900">{analytics.totalClicked || 0}</h3>
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+              <div className="flex items-center gap-3">
+                <div className="rounded-xl bg-amber-50 p-2 text-amber-600">
+                  <ShieldCheck className="h-4 w-4" />
+                </div>
+                <div>
+                  <p className="text-xs font-medium uppercase tracking-[0.18em] text-slate-500">Spam complaints</p>
+                  <h3 className="mt-1 text-2xl font-bold text-slate-900">{analytics.spamComplaints || 0}</h3>
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+              <div className="flex items-center gap-3">
+                <div className="rounded-xl bg-violet-50 p-2 text-violet-600">
+                  <Gauge className="h-4 w-4" />
+                </div>
+                <div>
+                  <p className="text-xs font-medium uppercase tracking-[0.18em] text-slate-500">Unsubscribed</p>
+                  <h3 className="mt-1 text-2xl font-bold text-slate-900">{analytics.unsubscribeCount || 0}</h3>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
 
-        {/* Campaigns */}
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+          <TrendChart
+            title="Delivery Trend"
+            subtext="Email deliveries over the last 7 days"
+            color="emerald"
+            data={analytics.deliveryTrend || []}
+          />
+          <TrendChart
+            title="Open Trend"
+            subtext="Unique opens over the last 7 days"
+            color="blue"
+            data={analytics.openTrend || []}
+          />
+          <TrendChart
+            title="Bounce Trend"
+            subtext="Hard and soft bounces over the last 7 days"
+            color="rose"
+            data={analytics.bounceTrend || []}
+          />
+        </div>
+
         <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
           <div className="flex items-center justify-between border-b border-slate-100 px-6 py-5">
             <div>
@@ -185,46 +252,44 @@ const performanceMetrics = [
           </div>
 
           <div className="grid grid-cols-1 gap-4 p-5 md:grid-cols-2 lg:grid-cols-4">
-            {analytics.topCampaigns?.map(
-              (camp: any) => (
-                <div
-                  key={camp._id}
-                  className="group rounded-xl border border-slate-200 bg-slate-50/70 p-4 transition-all duration-300 hover:-translate-y-0.5 hover:border-slate-300 hover:bg-white hover:shadow-sm"
-                >
-                  <h4 className="text-sm font-semibold text-slate-900 line-clamp-2">
-                    {camp.title}
-                  </h4>
+            {(analytics.topCampaigns || []).map((camp: any) => (
+              <div
+                key={camp._id}
+                className="group rounded-xl border border-slate-200 bg-slate-50/70 p-4 transition-all duration-300 hover:-translate-y-0.5 hover:border-slate-300 hover:bg-white hover:shadow-sm"
+              >
+                <h4 className="text-sm font-semibold text-slate-900 line-clamp-2">
+                  {camp.title}
+                </h4>
 
-                  <div className="mt-4 grid grid-cols-2 gap-2 text-xs">
-                    <p className="rounded-lg bg-white px-2.5 py-2 text-slate-500 shadow-sm">
-                      Sent:
-                      <span className="ml-1 font-semibold text-slate-700">
-                        {camp.sentCount || 0}
-                      </span>
-                    </p>
-
-                    <p className="rounded-lg bg-white px-2.5 py-2 text-slate-500 shadow-sm">
-                      Recipients:
-                      <span className="ml-1 font-semibold text-slate-700">
-                        {camp.totalRecipients || 0}
-                      </span>
-                    </p>
-                  </div>
-
-                  <div className="mt-4">
-                    <span
-                      className={`inline-block rounded-full px-2.5 py-1 text-[11px] font-semibold capitalize ${
-                        camp.status === "sent"
-                          ? "bg-emerald-100 text-emerald-800"
-                          : "bg-amber-100 text-amber-800"
-                      }`}
-                    >
-                      {camp.status}
+                <div className="mt-4 grid grid-cols-2 gap-2 text-xs">
+                  <p className="rounded-lg bg-white px-2.5 py-2 text-slate-500 shadow-sm">
+                    Sent:
+                    <span className="ml-1 font-semibold text-slate-700">
+                      {camp.sentCount || 0}
                     </span>
-                  </div>
+                  </p>
+
+                  <p className="rounded-lg bg-white px-2.5 py-2 text-slate-500 shadow-sm">
+                    Recipients:
+                    <span className="ml-1 font-semibold text-slate-700">
+                      {camp.totalRecipients || 0}
+                    </span>
+                  </p>
                 </div>
-              )
-            )}
+
+                <div className="mt-4">
+                  <span
+                    className={`inline-block rounded-full px-2.5 py-1 text-[11px] font-semibold capitalize ${
+                      camp.status === "sent"
+                        ? "bg-emerald-100 text-emerald-800"
+                        : "bg-amber-100 text-amber-800"
+                    }`}
+                  >
+                    {camp.status}
+                  </span>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       </div>

@@ -55,7 +55,42 @@ const CampaignSchema = new Schema(
       default: 0,
     },
 
-    
+    deliveredCount: {
+      type: Number,
+      default: 0,
+    },
+
+    clickCount: {
+      type: Number,
+      default: 0,
+    },
+
+    hardBounceCount: {
+      type: Number,
+      default: 0,
+    },
+
+    softBounceCount: {
+      type: Number,
+      default: 0,
+    },
+
+    spamComplaintCount: {
+      type: Number,
+      default: 0,
+    },
+
+    unsubscribeCount: {
+      type: Number,
+      default: 0,
+    },
+
+    openHistory: [
+      {
+        date: Date,
+        count: { type: Number, default: 1 },
+      },
+    ],
 
     isDeleted: {
       type: Boolean,
