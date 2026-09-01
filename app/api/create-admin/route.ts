@@ -1,3 +1,5 @@
+// app/api/create-admin/route.ts
+
 import bcrypt from "bcryptjs";
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongodb";
@@ -6,13 +8,13 @@ import User from "@/models/User";
 export async function GET() {
   await connectDB();
 
-  const exists = await User.findOne({
+  const existingUser = await User.findOne({
     email: "mrkashif9758@gmail.com",
   });
 
-  if (exists) {
+  if (existingUser) {
     return NextResponse.json({
-      message: "Admin already exists",
+      message: "User already exists",
     });
   }
 
@@ -22,12 +24,13 @@ export async function GET() {
   );
 
   await User.create({
-    name: "Admin",
+    name: "Kashif",
     email: "mrkashif9758@gmail.com",
     password: hashedPassword,
   });
 
   return NextResponse.json({
     success: true,
+    message: "Admin created",
   });
 }
